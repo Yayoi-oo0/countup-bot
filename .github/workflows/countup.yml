@@ -1,0 +1,46 @@
+name: countup
+
+on:
+  schedule:
+    # 毎朝 9:17（日本時間）: 記念日なら通知する（カウンターチャンネルを使っていれば、その更新も）
+    # ちょうど 0 分は GitHub が混みやすいので少しずらしています。混み具合で数分〜数十分遅れることがあります
+    - cron: "17 9 * * *"
+      timezone: "Asia/Tokyo"
+    # 毎晩 0:05（日本時間）: カウンターチャンネルの名前だけ更新する（使っていなければ何もしません）
+    - cron: "5 0 * * *"
+      timezone: "Asia/Tokyo"
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "テスト送信する（通知日でなくても今日のカウントを送る）"
+        type: boolean
+        default: false
+      date:
+        description: "この日付として実行する（例: 2026-12-27）。空なら今日"
+        type: string
+        required: false
+      register:
+        description: "/days コマンドを Discord に登録する（最初に1回）"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: 実行
+        run: python3 countup.py
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          COUNTER_CHANNEL_ID: ${{ secrets.COUNTER_CHANNEL_ID }}
+          # 「毎晩 0:05」の実行のときだけ true になる（上の cron を変えたら、ここも同じ文字列に）
+          COUNTUP_COUNTER_ONLY: ${{ github.event.schedule == '5 0 * * *' }}
+          COUNTUP_TEST: ${{ inputs.test }}
+          COUNTUP_DATE: ${{ inputs.date }}
+          COUNTUP_REGISTER: ${{ inputs.register }}
