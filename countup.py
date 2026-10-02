@@ -20,6 +20,7 @@ bot のトークンを設定すると、チャンネル名に日数を表示す�
   python3 countup.py --test            通知日でなくてもテスト送信
   python3 countup.py --counter-only    カウンターチャンネルの更新だけする
   python3 countup.py --register        /days コマンドを Discord に登録する
+  python3 countup.py --at 09:00        9:00（日本時間）ちょうどまで待ってから実行（1時間以内のとき）
 
 環境変数
   DISCORD_WEBHOOK_URL  通知の送信先（ウェブフックの URL）
@@ -326,6 +327,17 @@ def _flag(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() == "true"
 
 
+def seconds_until(at: str) -> float:
+    """日本時間の at（"09:00" など）まであと何秒か。1時間より先なら（もう過ぎているときも）0"""
+    hour, minute = (int(x) for x in at.split(":"))
+    now = datetime.now(JST)
+    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+    seconds = (target - now).total_seconds()
+    return seconds if seconds <= 60 * 60 else 0.0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Discord カウントアップ通知")
     parser.add_argument("--date", help="この日付として実行する（YYYY-MM-DD）")
@@ -335,6 +347,7 @@ def main() -> None:
     parser.add_argument("--test", action="store_true", help="通知日でなくてもテスト送信する")
     parser.add_argument("--counter-only", action="store_true", help="カウンターチャンネルの更新だけする")
     parser.add_argument("--register", action="store_true", help="/days コマンドを Discord に登録する")
+    parser.add_argument("--at", metavar="HH:MM", help="この時刻（日本時間）ちょうどまで待ってから実行する")
     args = parser.parse_args()
 
     # GitHub Actions から渡される値（手動実行の入力など）は環境変数で受け取る
@@ -342,6 +355,7 @@ def main() -> None:
     test = args.test or _flag("COUNTUP_TEST")
     counter_only = args.counter_only or _flag("COUNTUP_COUNTER_ONLY")
     register = args.register or _flag("COUNTUP_REGISTER")
+    at = (args.at or os.environ.get("COUNTUP_AT") or "").strip()
     webhook_url = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
     token = os.environ.get("DISCORD_BOT_TOKEN", "").strip()
     counter_id = os.environ.get("COUNTER_CHANNEL_ID", "").strip()
@@ -349,11 +363,24 @@ def main() -> None:
         d = date.fromisoformat(date_str) if date_str else today_jst()
     except ValueError:
         raise SystemExit(f"日付は YYYY-MM-DD の形で指定してください: {date_str}") from None
+    try:
+        wait = seconds_until(at) if at and not date_str and not register else 0.0
+    except ValueError:
+        raise SystemExit(f"時刻は HH:MM の形で指定してください: {at}") from None
 
     if args.list:
         for when, text in upcoming(d, args.list):
             print(f"{when:%Y-%m-%d}({WEEKDAYS[when.weekday()]})  {text.replace('**', '')}")
         return
+
+    # 定期実行は少し早めに起動するので、指定の時刻ちょうどまで待つ
+    # （通知の実行は、通知日でなければ待たずに終わる。起動が遅れて時刻を過ぎていたら、すぐ実行する）
+    if wait:
+        d = (datetime.now(JST) + timedelta(seconds=wait)).date()
+        has_work = bool(counter_id) if counter_only else (test or build_message(d) is not None)
+        if has_work:
+            print(f"{at} まで {wait / 60:.1f} 分待ちます", flush=True)
+            time.sleep(wait)
 
     problems = []
     tasks = []
