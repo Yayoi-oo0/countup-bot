@@ -2,13 +2,12 @@ name: countup
 
 on:
   schedule:
+    # cron は UTC（世界標準時）で書きます。日本時間 = UTC + 9 時間
     # 毎朝 9:00（日本時間）: 記念日なら通知する（カウンターチャンネルを使っていれば、その更新も）
-    # GitHub の定期実行は数分〜十数分遅れることがあるので、8:43 に起動して 9:00 ちょうどまで待ってから送ります
-    - cron: "43 8 * * *"
-      timezone: "Asia/Tokyo"
-    # 毎晩 0:00（日本時間）: カウンターチャンネルの名前を更新する（23:43 に起動して 0:00 まで待つ。使っていなければ何もしません）
+    # GitHub の定期実行は数分〜十数分遅れることがあるので、8:43（= UTC 23:43）に起動して 9:00 ちょうどまで待ってから送ります
     - cron: "43 23 * * *"
-      timezone: "Asia/Tokyo"
+    # 毎晩 0:00（日本時間）: カウンターチャンネルの名前を更新する（23:43 = UTC 14:43 に起動して 0:00 まで待つ）
+    - cron: "43 14 * * *"
   workflow_dispatch:
     inputs:
       test:
@@ -40,9 +39,9 @@ jobs:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           COUNTER_CHANNEL_ID: ${{ secrets.COUNTER_CHANNEL_ID }}
           # 定期実行のときは、この時刻（日本時間）ちょうどまで待ってから実行する（上の cron を変えたら、ここも同じ文字列に）
-          COUNTUP_AT: ${{ github.event.schedule == '43 8 * * *' && '09:00' || github.event.schedule == '43 23 * * *' && '00:00' || '' }}
+          COUNTUP_AT: ${{ github.event.schedule == '43 23 * * *' && '09:00' || github.event.schedule == '43 14 * * *' && '00:00' || '' }}
           # 「毎晩 0:00」の実行のときだけ true になる
-          COUNTUP_COUNTER_ONLY: ${{ github.event.schedule == '43 23 * * *' }}
+          COUNTUP_COUNTER_ONLY: ${{ github.event.schedule == '43 14 * * *' }}
           COUNTUP_TEST: ${{ inputs.test }}
           COUNTUP_DATE: ${{ inputs.date }}
           COUNTUP_REGISTER: ${{ inputs.register }}
