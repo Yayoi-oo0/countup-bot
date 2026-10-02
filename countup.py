@@ -154,8 +154,10 @@ def days_report(d: date) -> str:
 
 
 def counter_name(d: date) -> str:
-    """カウンターチャンネルの名前（例: 📅 9/18から12日）"""
-    return COUNTER_PREFIX + status_text(d)
+    """カウンターチャンネルの名前（例: 🎉︙記念日｜12日）。テキストチャンネル名には「/」が使えないので日数だけ"""
+    if d < START_DATE:
+        return f"{COUNTER_PREFIX}あと{(START_DATE - d).days}日"
+    return COUNTER_PREFIX + count_text(d)
 
 
 # ---------------------------------------------------------------------------
